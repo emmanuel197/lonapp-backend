@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist'
 ]
 
-AUTH_USER_MODEL = "accounts.User"
+AUTH_USER_MODEL = "api.User"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
