@@ -3,6 +3,7 @@ from django.conf import settings
 from django.contrib.auth.models import AbstractUser # Or AbstractBaseUser
 from django.contrib.gis.db import models as gismodels # Use gismodels for geospatial fields
 from django.core.exceptions import ValidationError
+from django.utils import timezone # Import timezone for default values
 
 # 1.1.1 Create Organization (Tenant) model
 # Incorporating fields from model-exam.txt LaundryOrganization and task document
@@ -58,6 +59,7 @@ class Role(models.Model):
 # 1.3.2 Add email/phone login capability (fields added, login logic in authentication)
 # 1.3.3 Create Organization relationship for staff users (null for customers)
 # 1.3.4 Implement role field or many-to-many relation to Role model
+# Incorporating address field from model-exam2.txt Customer model
 class User(AbstractUser):
     # Remove username field if using email/phone for login
     # username = None # Uncomment if using email/phone as primary identifier
@@ -84,6 +86,9 @@ class User(AbstractUser):
     # first_name and last_name are already in AbstractUser
     # title = models.CharField(max_length=100, blank=True, null=True) # Optional, if different from role
     # id_document = models.FileField(upload_to="organization_official_ids/", blank=True, null=True) # Optional
+
+    # Add address field from model-exam2.txt Customer
+    address = models.TextField(blank=True, null=True) # e.g. neighborhood/town
 
     # USERNAME_FIELD = 'email' # Uncomment if using email for login
     # REQUIRED_FIELDS = [] # Add fields required for createsuperuser if username is removed
@@ -248,7 +253,45 @@ class TurnaroundTime(models.Model):
     def __str__(self):
         return f"{self.name} ({self.hours} hours)"
 
-# 1.5.1 Create Order model
+# 4) FULL ITEM DESCRIPTION / CARE DETAILS (OPTIONAL) from model-exam2.txt
+class ItemDetail(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='item_details') # 1.1.3
+
+    # Basic Identification
+    item_type    = models.CharField(max_length=50, blank=True, null=True)
+    material     = models.CharField(max_length=50, blank=True, null=True)
+    color        = models.CharField(max_length=30, blank=True, null=True)
+    size         = models.CharField(max_length=20, blank=True, null=True)
+    quantity     = models.PositiveIntegerField(default=1)
+    tag_number   = models.CharField(max_length=30, blank=True, null=True)
+
+    # Condition & Care
+    condition    = models.CharField(max_length=30, blank=True, null=True)
+    age          = models.CharField(max_length=30, blank=True, null=True, help_text="Approximate age (e.g. '1 year')")
+    embellishments = models.CharField(max_length=100, blank=True, null=True)
+    care_label_instructions = models.TextField(blank=True, null=True)
+    special_handling = models.TextField(blank=True, null=True)
+
+    # Details
+    weight       = models.CharField(max_length=30, blank=True, null=True, help_text="e.g. '1.2 kg'")
+    pattern_design = models.CharField(max_length=50, blank=True, null=True)
+    dimensions     = models.CharField(max_length=50, blank=True, null=True, help_text="e.g. '50×30 cm'")
+    category       = models.CharField(max_length=50, blank=True, null=True)
+
+    # Image (upload to media/…)
+    image = models.ImageField(
+        upload_to='item_images/',
+        blank=True,
+        null=True,
+        help_text="Optional: photo of item (max 5 MB)"
+    )
+
+    def __str__(self):
+        parts = [self.item_type or '', self.color or '', self.size or '']
+        return " ".join([p for p in parts if p])
+
+
+# 1.5.1 Create Order model (Based on LaundryBag from model-exam2.txt and existing Order)
 class Order(models.Model):
     # 1.1.3 Add Organization foreign key
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='orders')
@@ -256,6 +299,52 @@ class Order(models.Model):
     customer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, related_name='customer_orders', null=True, blank=True) # Link to the User model
     outlet = models.ForeignKey(Outlet, on_delete=models.SET_NULL, related_name='outlet_orders', null=True, blank=True) # Outlet where order was dropped off/picked up
 
+    # Fields from model-exam2.txt LaundryBag
+    COLLECTION_METHOD_CHOICES = [
+        ('customer_dropoff', 'Customer Drop-off'),
+        ('company_pickup',   'Laundry Company Pick-Up'),
+    ]
+    collection_method = models.CharField(
+        max_length=20,
+        choices=COLLECTION_METHOD_CHOICES,
+        default='customer_dropoff'
+    )
+    pickup_location = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="If company pick-up, store pickup address/branch/etc."
+    )
+
+    DELIVERY_METHOD_CHOICES = [
+        ('pick_up',  'Pick Up'),
+        ('delivery', 'Delivery'),
+    ]
+    delivery_method   = models.CharField(
+        max_length=10,
+        choices=DELIVERY_METHOD_CHOICES,
+        default='pick_up'
+    )
+    delivery_location = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Address where laundry should be delivered"
+    )
+
+    # Auto-generated invoice/bag numbers (unique per organization)
+    bag_number     = models.CharField(max_length=20) # Unique per organization
+    invoice_number = models.CharField(max_length=20) # Unique per organization
+
+    # Service Type (standard, express, etc.) – can also be a FK to a ServiceType model
+    # Keeping the link via LaundryItem for flexibility, but a general service type could be here too
+    # service_type = models.ForeignKey(ServiceType, on_delete=models.SET_NULL, null=True, blank=True) # Optional: if an order has one primary service type
+
+    # Duration (in days) and expected delivery date
+    duration_days  = models.PositiveIntegerField(default=0)
+    delivery_date  = models.DateField(blank=True, null=True)
+
+    # Status fields (from existing Order model)
     ORDER_STATUS_CHOICES = [
         ('pending', 'Pending Intake'), # Customer initiated online, awaiting drop-off
         ('received', 'Received at Outlet'), # Attendant created
@@ -282,33 +371,62 @@ class Order(models.Model):
     ]
     payment_status = models.CharField(max_length=50, choices=PAYMENT_STATUS_CHOICES, default='pending')
 
+    # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
-    # Add fields for total amount, discount, etc.
-    total_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Totals and payment info
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # Default to 0.00 as per model-exam2.txt
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # Default to 0.00
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # From model-exam2.txt
+
+    # Special instructions
+    special_instructions = models.TextField(blank=True, null=True) # From model-exam2.txt
+
+    @property
+    def amount_outstanding(self):
+        return self.total_amount - self.amount_paid
 
     def __str__(self):
-        return f"Order #{self.id} for {self.organization.name} - Status: {self.get_order_status_display()}"
+        return f"Order #{self.id} ({self.bag_number}) for {self.organization.name} - Status: {self.get_order_status_display()}"
 
-# 1.5.2 Create LaundryItem model
+    class Meta:
+        # Ensure bag_number and invoice_number are unique per organization
+        unique_together = (('organization', 'bag_number'), ('organization', 'invoice_number'))
+
+
+# 1.5.2 Create LaundryItem model (Based on model-exam2.txt LaundryItem and existing LaundryItem)
 # 1.5.3 Link LaundryItem to Order and Organization
 # 1.5.4 Implement item status tracking
 class LaundryItem(models.Model):
     # 1.1.3 Add Organization foreign key
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='laundry_items')
-    # 1.5.3 Link to Order
+    # 1.5.3 Link to Order (renamed from 'bag' in model-exam2.txt)
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
 
-    # 1.5.2 Fields: description, service_types, turnaround_time, current_stage
+    # Fields from model-exam2.txt LaundryItem
+    # Using description for item name, category could be added if needed
     description = models.CharField(max_length=255) # e.g., "Blue shirt", "King size duvet"
+    # category = models.CharField(max_length=50, blank=True, null=True, help_text="e.g. 'Ladies', 'Gents'") # Optional category field
+
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # Increased max_digits slightly
+    quantity = models.PositiveIntegerField(default=1) # Default to 1
+
+    # Computed: unit_price * quantity, but stored for easy queries (as per model-exam2.txt)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00) # Increased max_digits slightly
+
+    # Preferences: Wash / Dry / Iron (booleans) - Replaced by ManyToMany to ServiceType for flexibility
+    # wash = models.BooleanField(default=True)
+    # dry  = models.BooleanField(default=False)
+    # iron = models.BooleanField(default=False)
+
+    # 1.5.2 Fields: service_types, turnaround_time, current_stage (from existing)
     # Many-to-many relationship for multiple service types per item
     service_types = models.ManyToManyField(ServiceType, related_name='items')
     turnaround_time = models.ForeignKey(TurnaroundTime, on_delete=models.SET_NULL, null=True, blank=True)
 
-    # 1.5.4 & 1.5.5 Implement item status tracking through stages
+    # 1.5.4 & 1.5.5 Implement item status tracking through stages (from existing)
     ITEM_STATUS_CHOICES = [
         ('received', 'Received'), # Part of an order received at outlet/factory
         ('awaiting_wash', 'Awaiting Washing'),
@@ -338,13 +456,29 @@ class LaundryItem(models.Model):
     ]
     current_stage = models.CharField(max_length=50, choices=ITEM_STATUS_CHOICES, default='received')
 
-    # Optional: fields for weight, quantity (if items are counted), notes
+    # Optional: fields for weight, notes (from existing)
     weight_kg = models.DecimalField(max_digits=6, decimal_places=2, null=True, blank=True)
-    quantity = models.IntegerField(null=True, blank=True) # e.g., number of shirts
     notes = models.TextField(blank=True, null=True)
+
+    # Optionally link to the detailed item description (from model-exam2.txt)
+    detail = models.OneToOneField(
+        'ItemDetail',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='laundry_item', # Added related_name
+        help_text="Complete item description/care info"
+    )
+
+    def save(self, *args, **kwargs):
+        # Auto-compute `amount` before saving
+        self.amount = self.unit_price * self.quantity
+        super().save(*args, **kwargs)
+        # Consider adding logic here or in a signal to update Order total_amount
 
     def __str__(self):
         return f"Item #{self.id} ({self.description}) - Status: {self.get_current_stage_display()}"
+
 
 # 1.7.1 Create Dispatch Request model
 class DispatchRequest(models.Model):
@@ -384,8 +518,8 @@ class DispatchRequest(models.Model):
     completed_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        source_desc = self.source_outlet.abbreviated_name if self.source_outlet else 'Factory'
-        dest_desc = self.destination_outlet.abbreviated_name if self.destination_outlet else 'Factory'
+        source_desc = self.source_outlet.abbreviated_name if self.source_outlet else ('Factory' if self.is_from_factory else 'Unknown Source')
+        dest_desc = self.destination_outlet.abbreviated_name if self.destination_outlet else ('Factory' if self.is_to_factory else 'Unknown Destination')
         return f"Dispatch #{self.id} ({source_desc} to {dest_desc}) - Status: {self.get_status_display()}"
 
 # 1.7.2 Implement Handover/Transfer model for team-to-team item transfers
@@ -404,6 +538,7 @@ class ItemHandover(models.Model):
         ('qc', 'QC'),
         ('packaging', 'Packaging'),
         ('outlet_return', 'Return to Outlet'), # Factory to Outlet handover
+        ('factory_intake', 'Factory Intake'), # Initial handover from Dispatch to Factory
     ]
     from_stage = models.CharField(max_length=50, choices=STAGE_CHOICES, null=True, blank=True) # Null for initial factory receipt
     to_stage = models.CharField(max_length=50, choices=STAGE_CHOICES)
@@ -474,4 +609,3 @@ class OrderPayment(models.Model):
 
 # Note: Remember to configure settings.AUTH_USER_MODEL = 'api.User' in settings.py
 # And run makemigrations and migrate after adding/modifying models.
-
