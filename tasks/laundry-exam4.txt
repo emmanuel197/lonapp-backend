@@ -1,0 +1,236 @@
+from django.db import models
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
+
+
+class LaundryOrganization(models.Model):
+    """
+    Assuming you already have a parent “organization” model. If not, include it;
+    otherwise, simply link customers to your existing LaundryOrganization.
+    """
+    name       = models.CharField(max_length=150, help_text="(Optional) Company display name")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name or f"Organization #{self.id}"
+
+
+class Customer(models.Model):
+    GENDER_CHOICES = [
+        ("male",   "Male"),
+        ("female", "Female"),
+        ("other",  "Other"),
+    ]
+
+    ACCOUNT_STATUS_CHOICES = [
+        ("active",    "Active"),
+        ("suspended", "Suspended"),
+        ("inactive",  "Inactive"),
+    ]
+
+    PAYMENT_METHOD_CHOICES = [
+        ("card",         "Card"),
+        ("mobile_money", "Mobile Money"),
+        ("cash",         "Physical Cash"),
+    ]
+
+    SUBSCRIPTION_STATUS_CHOICES = [
+        ("subscribed",    "Subscribed"),
+        ("unsubscribed",  "Unsubscribed"),
+        ("trial",         "Trial"),
+        # …add more as needed
+    ]
+
+    COMMUNICATION_CHANNEL_CHOICES = [
+        ("in_notification", "In‐Notification"),
+        ("email",           "Email"),
+        ("sms",             "SMS"),
+        ("whatsapp",        "WhatsApp"),
+        # …etc.
+    ]
+
+    organization      = models.ForeignKey(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="customers",
+        help_text="Which laundry company this customer belongs to."
+    )
+    customer_id       = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Unique Customer Code (e.g. '0001', '0002', etc.)"
+    )
+    profile_image     = models.ImageField(
+        upload_to="customer_profiles/",
+        blank=True,
+        null=True,
+        help_text="Optional profile photo"
+    )
+
+    # ─────────── Personal Information ───────────
+    first_name        = models.CharField(max_length=50)
+    middle_name       = models.CharField(max_length=50, blank=True, null=True)
+    last_name         = models.CharField(max_length=50)
+    gender            = models.CharField(max_length=10, choices=GENDER_CHOICES)
+
+    # ─────────── Contact Information ───────────
+    phone_number      = models.CharField(
+        max_length=20,
+        help_text="Primary phone (include country code, eg. +233…)"
+    )
+    whatsapp_number   = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="(Optional) Include country code"
+    )
+    email             = models.EmailField(unique=True)
+    physical_address  = models.TextField(help_text="Full mailing/delivery address")
+
+    # ─────────── Account Information ───────────
+    username          = models.CharField(max_length=50, unique=True)
+    password          = models.CharField(
+        max_length=128,
+        help_text="Default password (you might choose to hash this or link to Django User instead)"
+    )
+    account_status    = models.CharField(
+        max_length=20,
+        choices=ACCOUNT_STATUS_CHOICES,
+        default="active",
+        help_text="Is the customer active, suspended, etc.?"
+    )
+
+    # ─────────── Billing Information ───────────
+    payment_method    = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    # – Card details (only if payment_method == "card")
+    card_number       = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="e.g. 'XXXX-XXXX-XXXX-XXXX' (only if payment_method='card')"
+    )
+    expiry_date       = models.CharField(
+        max_length=5,
+        blank=True,
+        null=True,
+        help_text="MM/YY (only if payment_method='card')"
+    )
+    cvc               = models.CharField(
+        max_length=4,
+        blank=True,
+        null=True,
+        help_text="CVC (only if payment_method='card')"
+    )
+    # – Mobile Money details (only if payment_method == "mobile_money")
+    mobile_money_network = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="(Only if payment_method='mobile_money') e.g. 'MTN', 'Vodafone', etc."
+    )
+    mobile_money_number  = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Mobile Money number (if that is the payment method)"
+    )
+    # – Physical Cash requires no extra fields beyond choosing the method.
+
+    delivery_address   = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Address where we deliver (often same as physical_address)."
+    )
+
+    # ─────────── Preferences ───────────
+    preferred_pickup_days = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text=(
+            "Comma‐separated weekdays, e.g. 'Mon,Tue,Fri' to indicate preferred pickup/delivery days."
+        )
+    )
+    days_per_week       = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Number of pickup/delivery days per week (e.g. 1, 2, 3…)."
+    )
+    special_instructions = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Any special delivery/pickup instructions."
+    )
+
+    # ─────────── Subscription / Loyalty ───────────
+    subscription_status  = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_STATUS_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Is the customer on a subscription plan, trial, or unsubscribed?"
+    )
+    loyalty_points       = models.PositiveIntegerField(
+        default=0,
+        help_text="Total loyalty points accrued"
+    )
+
+    # ─────────── Communication Preferences ───────────
+    communication_channels = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text=(
+            "Comma‐separated communication channels the customer prefers. "
+            "Possible values: " + ", ".join([c[0] for c in COMMUNICATION_CHANNEL_CHOICES])
+        )
+    )
+    # Store as e.g. "in_notification,email" if they pick those two.
+
+    # ─────────── Comments ───────────
+    comments           = models.TextField(blank=True, null=True)
+
+    # ─────────── Audit Fields ───────────
+    created_at         = models.DateTimeField(auto_now_add=True)
+    updated_at         = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        # Enforce that card_... fields are only provided when payment_method == "card",
+        # and mobile_money_... fields only when payment_method == "mobile_money".
+        errors = {}
+
+        if self.payment_method == "card":
+            if not (self.card_number and self.expiry_date and self.cvc):
+                errors["card_number"] = _("All card fields are required when payment_method is 'card'.")
+        elif self.payment_method == "mobile_money":
+            if not (self.mobile_money_network and self.mobile_money_number):
+                errors["mobile_money_network"] = _(
+                    "Mobile Money fields are required when payment_method is 'mobile_money'."
+                )
+        # If method is 'cash', no extra fields are required.
+
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def pickup_days_list(self):
+        """
+        Returns the preferred_pickup_days as a Python list.
+        e.g. "Mon,Tue,Fri" -> ["Mon", "Tue", "Fri"].
+        """
+        if self.preferred_pickup_days:
+            return [day.strip() for day in self.preferred_pickup_days.split(",")]
+        return []
+
+    @property
+    def communication_channel_list(self):
+        """
+        Returns the communication_channels as a Python list.
+        e.g. "in_notification,email" -> ["in_notification", "email"].
+        """
+        if self.communication_channels:
+            return [ch.strip() for ch in self.communication_channels.split(",")]
+        return []
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} (ID: {self.customer_id})"

@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser # Or AbstractBaseUser
 from django.contrib.gis.db import models as gismodels # Use gismodels for geospatial fields
 from django.core.exceptions import ValidationError
 from django.utils import timezone # Import timezone for default values
+from django.utils.translation import gettext_lazy as _ # Import for validation messages
 
 # 1.1.1 Create Organization (Tenant) model
 # Incorporating fields from model-exam.txt LaundryOrganization and task document
@@ -37,6 +38,7 @@ class Subscription(models.Model):
         return f"{self.organization.name} - {self.plan_type} ({'Active' if self.active_status else 'Inactive'})"
 
 # 1.4.1 Create Role model with role name constants
+# Using the existing Role model which aligns with task 1.3.5
 class Role(models.Model):
     # 1.3.5 Define user roles
     ROLE_CHOICES = [
@@ -49,17 +51,43 @@ class Role(models.Model):
         ('ironer', 'Ironer'),
         ('qc_packager', 'QC Packager'),
         ('customer', 'Customer'),
+        # Roles from laundry-exam3.txt Role model (if different from above, add here or clarify)
+        # ('manager', 'Manager'), # Example if needed
+        # ('clerk', 'Clerk'),     # Example if needed
     ]
     name = models.CharField(max_length=50, choices=ROLE_CHOICES, unique=True)
 
     def __str__(self):
         return self.get_name_display()
 
+# Model from laundry-exam3.txt for Departments within an Organization
+class Department(models.Model):
+    # 1.1.3 Add Organization foreign key
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='departments')
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        unique_together = ('organization', 'name') # Department names unique per organization
+
+    def __str__(self):
+        return f"{self.organization.name} - {self.name}"
+
+# Model from laundry-exam3.txt for System Modules/Permissions
+class Module(models.Model):
+    name = models.CharField(max_length=100, unique=True) # Modules are likely global, not per organization
+
+    def __str__(self):
+        return self.name
+
 # 1.3.1 Implement custom User model (subclassing AbstractUser)
 # 1.3.2 Add email/phone login capability (fields added, login logic in authentication)
 # 1.3.3 Create Organization relationship for staff users (null for customers)
 # 1.3.4 Implement role field or many-to-many relation to Role model
 # Incorporating address field from model-exam2.txt Customer model
+# Note: The Employee model in laundry-exam3.txt contains many HR-specific fields.
+# We will keep the User model focused on authentication and core identity,
+# and potentially link it to an Employee profile if detailed HR data is needed separately.
+# For now, we'll add some key fields from Employee to User if they are relevant for login/basic profile.
 class User(AbstractUser):
     # Remove username field if using email/phone for login
     # username = None # Uncomment if using email/phone as primary identifier
@@ -67,6 +95,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, blank=True, null=True)
     phone_number = models.CharField(max_length=20, unique=True, blank=True, null=True) # 1.3.2
     # 1.3.3 Link staff users to an Organization
+    # Note: This field is for staff users. Customer organization link is in CustomerProfile.
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
@@ -82,30 +111,454 @@ class User(AbstractUser):
         blank=True
     )
 
-    # Add fields from OrganizationOfficial if needed, or rely on User model fields
-    # first_name and last_name are already in AbstractUser
-    # title = models.CharField(max_length=100, blank=True, null=True) # Optional, if different from role
-    # id_document = models.FileField(upload_to="organization_official_ids/", blank=True, null=True) # Optional
-
-    # Add address field from model-exam2.txt Customer
+    # Add address field from model-exam2.txt Customer - Used for general user address
     address = models.TextField(blank=True, null=True) # e.g. neighborhood/town
+
+    # Add fields from laundry-exam3.txt Employee if needed in User model
+    # employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True) # Keep separate in Employee model?
+    # profile_image = models.ImageField(upload_to="user_profiles/", blank=True, null=True) # Can add to User
+    # gender = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], blank=True, null=True) # Can add to User
+    # date_of_birth = models.DateField(blank=True, null=True) # Can add to User
+    # residential_addr = models.TextField(blank=True, null=True) # Already have 'address'
 
     # USERNAME_FIELD = 'email' # Uncomment if using email for login
     # REQUIRED_FIELDS = [] # Add fields required for createsuperuser if username is removed
 
     def __str__(self):
         if self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name} ({self.role})"
+            return f"{self.first_name} {self.last_name} ({self.role or 'No Role'})"
         elif self.email:
-            return f"{self.email} ({self.role})"
+            return f"{self.email} ({self.role or 'No Role'})"
         elif self.phone_number:
-            return f"{self.phone_number} ({self.role})"
+            return f"{self.phone_number} ({self.role or 'No Role'})"
         else:
-            return f"User ID: {self.id} ({self.role})"
+            return f"User ID: {self.id} ({self.role or 'No Role'})"
 
     class Meta:
         # Add constraints or indexes if needed
         pass
+
+# Model from laundry-exam4.txt for detailed Customer information
+# This model holds customer-specific data and links to the core User model.
+class CustomerProfile(models.Model):
+    GENDER_CHOICES = [
+        ("male",   "Male"),
+        ("female", "Female"),
+        ("other",  "Other"),
+    ]
+
+    ACCOUNT_STATUS_CHOICES = [
+        ("active",    "Active"),
+        ("suspended", "Suspended"),
+        ("inactive",  "Inactive"),
+    ]
+
+    PAYMENT_METHOD_CHOICES = [
+        ("card",         "Card"),
+        ("mobile_money", "Mobile Money"),
+        ("cash",         "Physical Cash"),
+    ]
+
+    SUBSCRIPTION_STATUS_CHOICES = [
+        ("subscribed",    "Subscribed"),
+        ("unsubscribed",  "Unsubscribed"),
+        ("trial",         "Trial"),
+        # …add more as needed
+    ]
+
+    COMMUNICATION_CHANNEL_CHOICES = [
+        ("in_notification", "In‐Notification"),
+        ("email",           "Email"),
+        ("sms",             "SMS"),
+        ("whatsapp",        "WhatsApp"),
+        # …etc.
+    ]
+
+    # Link to the core User account
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="customer_profile"
+    )
+
+    # Link to the Organization the customer belongs to
+    organization      = models.ForeignKey(
+        Organization, # Link to our main Organization model
+        on_delete=models.CASCADE,
+        related_name="customers",
+        help_text="Which laundry company this customer belongs to."
+    )
+
+    customer_id       = models.CharField(
+        max_length=20,
+        unique=True, # Unique across the system, or per organization? Assuming system-wide for now.
+        help_text="Unique Customer Code (e.g. '0001', '0002', etc.)"
+    )
+    profile_image     = models.ImageField(
+        upload_to="customer_profiles/",
+        blank=True,
+        null=True,
+        help_text="Optional profile photo"
+    )
+
+    # ─────────── Personal Information (Some overlap with User, but keeping here for customer context) ───────────
+    # first_name        = models.CharField(max_length=50) # Available on User
+    middle_name       = models.CharField(max_length=50, blank=True, null=True)
+    # last_name         = models.CharField(max_length=50) # Available on User
+    gender            = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True) # Added blank/null
+    date_of_birth     = models.DateField(blank=True, null=True)
+
+    # ─────────── Contact Information (Some overlap with User) ───────────
+    # phone_number      = models.CharField(max_length=20, help_text="Primary phone (include country code, eg. +233…)") # Available on User
+    whatsapp_number   = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="(Optional) Include country code"
+    )
+    # email             = models.EmailField(unique=True) # Available on User
+    # physical_address  = models.TextField(help_text="Full mailing/delivery address") # Available on User as 'address'
+    delivery_address   = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Address where we deliver (often same as physical_address)."
+    )
+
+
+    # ─────────── Account Information ───────────
+    # username          = models.CharField(max_length=50, unique=True) # Handled by User model
+    # password          = models.CharField(max_length=128, help_text="Default password (you might choose to hash this or link to Django User instead)") # Handled by User model
+    account_status    = models.CharField(
+        max_length=20,
+        choices=ACCOUNT_STATUS_CHOICES,
+        default="active",
+        help_text="Is the customer active, suspended, etc.?"
+    )
+
+    # ─────────── Billing Information ───────────
+    payment_method    = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True, null=True) # Added blank/null
+    # – Card details (only if payment_method == "card")
+    card_number       = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="e.g. 'XXXX-XXXX-XXXX-XXXX' (only if payment_method='card')"
+    )
+    expiry_date       = models.CharField(
+        max_length=5,
+        blank=True,
+        null=True,
+        help_text="MM/YY (only if payment_method='card')"
+    )
+    cvc               = models.CharField(
+        max_length=4,
+        blank=True,
+        null=True,
+        help_text="CVC (only if payment_method='card')"
+    )
+    # – Mobile Money details (only if payment_method == "mobile_money")
+    mobile_money_network = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="(Only if payment_method='mobile_money') e.g. 'MTN', 'Vodafone', etc."
+    )
+    mobile_money_number  = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        help_text="Mobile Money number (if that is the payment method)"
+    )
+    # – Physical Cash requires no extra fields beyond choosing the method.
+
+
+    # ─────────── Preferences ───────────
+    preferred_pickup_days = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text=(
+            "Comma‐separated weekdays, e.g. 'Mon,Tue,Fri' to indicate preferred pickup/delivery days."
+        )
+    )
+    days_per_week       = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="Number of pickup/delivery days per week (e.g. 1, 2, 3…)."
+    )
+    special_instructions = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Any special delivery/pickup instructions."
+    )
+
+    # ─────────── Subscription / Loyalty ───────────
+    subscription_status  = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_STATUS_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Is the customer on a subscription plan, trial, or unsubscribed?"
+    )
+    loyalty_points       = models.PositiveIntegerField(
+        default=0,
+        help_text="Total loyalty points accrued"
+    )
+
+    # ─────────── Communication Preferences ───────────
+    communication_channels = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text=(
+            "Comma‐separated communication channels the customer prefers. "
+            "Possible values: " + ", ".join([c[0] for c in COMMUNICATION_CHANNEL_CHOICES])
+        )
+    )
+    # Store as e.g. "in_notification,email" if they pick those two.
+
+    # ─────────── Comments ───────────
+    comments           = models.TextField(blank=True, null=True)
+
+    # ─────────── Audit Fields ───────────
+    created_at         = models.DateTimeField(auto_now_add=True)
+    updated_at         = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        super().clean() # Call the parent clean method
+        # Enforce that card_... fields are only provided when payment_method == "card",
+        # and mobile_money_... fields only when payment_method == "mobile_money".
+        errors = {}
+
+        if self.payment_method == "card":
+            if not (self.card_number and self.expiry_date and self.cvc):
+                errors["card_number"] = _("All card fields are required when payment_method is 'card'.")
+            # Ensure mobile money fields are null/empty
+            if self.mobile_money_network or self.mobile_money_number:
+                 errors["mobile_money_network"] = _("Mobile Money fields must be empty for a Card payment method.")
+
+        elif self.payment_method == "mobile_money":
+            if not (self.mobile_money_network and self.mobile_money_number):
+                errors["mobile_money_network"] = _(
+                    "Mobile Money fields are required when payment_method is 'mobile_money'."
+                )
+            # Ensure card fields are null/empty
+            if self.card_number or self.expiry_date or self.cvc:
+                 errors["card_number"] = _("Card fields must be empty for a Mobile Money payment method.")
+
+        # If method is 'cash' or 'bank_transfer' or 'online' or 'other', no extra fields are required.
+        # Add validation for other payment types if added to choices
+
+        if errors:
+            raise ValidationError(errors)
+
+    @property
+    def pickup_days_list(self):
+        """
+        Returns the preferred_pickup_days as a Python list.
+        e.g. "Mon,Tue,Fri" -> ["Mon", "Tue", "Fri"].
+        """
+        if self.preferred_pickup_days:
+            return [day.strip() for day in self.preferred_pickup_days.split(",")]
+        return []
+
+    @property
+    def communication_channel_list(self):
+        """
+        Returns the communication_channels as a Python list.
+        e.g. "in_notification,email" -> ["in_notification", "email"].
+        """
+        if self.communication_channels:
+            return [ch.strip() for ch in self.communication_channels.split(",")]
+        return []
+
+
+    def __str__(self):
+        # Use user's name if available, otherwise fallback to customer_id
+        user_name = self.user.get_full_name() or self.user.email or self.user.phone_number
+        return f"{user_name} (Customer ID: {self.customer_id})"
+
+
+# Model from laundry-exam3.txt for detailed Employee information
+# This model holds HR-specific data and links to the core User model.
+class Employee(models.Model):
+    GENDER_CHOICES = [
+        ("male",   "Male"),
+        ("female", "Female"),
+        ("other",  "Other"),
+    ]
+
+    # 1.1.3 Add Organization foreign key
+    organization   = models.ForeignKey(
+        Organization, # Link to our main Organization model
+        on_delete=models.CASCADE,
+        related_name="employees"
+    )
+
+    # Link to the core User account
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="employee_profile"
+    )
+
+    # Identification
+    employee_id    = models.CharField(max_length=20, unique=True) # Unique across the system, or per organization? Let's assume system-wide for now.
+    profile_image  = models.ImageField(upload_to="employee_profiles/", blank=True, null=True)
+
+    # Personal Information (Some might overlap with User, decide which model is source of truth)
+    # first_name     = models.CharField(max_length=50) # Already in User
+    # middle_name    = models.CharField(max_length=50, blank=True, null=True)
+    # last_name      = models.CharField(max_length=50) # Already in User
+    # personal_phone = models.CharField(max_length=20, help_text="Include country code, eg. +233245224993") # Could use User phone_number
+    date_of_birth  = models.DateField(blank=True, null=True)
+    gender         = models.CharField(max_length=10, choices=GENDER_CHOICES, blank=True, null=True) # Added blank/null
+
+    # Contact Information (Some might overlap with User)
+    contact_phone    = models.CharField(max_length=20, blank=True, null=True, help_text="Alternate phone number") # Added blank/null
+    whatsapp_number  = models.CharField(max_length=20, blank=True, null=True, help_text="(Optional)")
+    # email            = models.EmailField(unique=True) # Already in User
+    residential_addr = models.TextField(blank=True, null=True, help_text="Full mailing/residential address") # Added blank/null, could use User address
+
+    # Employment Information
+    job_title         = models.CharField(max_length=100, blank=True, null=True) # Added blank/null
+    department        = models.ForeignKey(Department, on_delete=models.SET_NULL, blank=True, null=True)
+    employment_status = models.CharField(max_length=50, blank=True, null=True, help_text="E.g. 'Full‐Time', 'Contractor', etc.") # Added blank/null
+    supervisor        = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="subordinates"
+    )
+    hire_date         = models.DateField(blank=True, null=True)
+
+    # Attendance & Schedule
+    start_shift   = models.TimeField(blank=True, null=True)
+    break_time    = models.TimeField(blank=True, null=True)
+    end_shift     = models.TimeField(blank=True, null=True)
+    work_days     = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Comma‐separated days, e.g. 'Mon,Tue,Thu,Fri'"
+    )
+    days_per_week = models.PositiveSmallIntegerField(default=5)
+
+    # Leave & Time Off
+    vacation_days        = models.PositiveSmallIntegerField(default=0)
+    sick_leave_days      = models.PositiveSmallIntegerField(default=0)
+    compassionate_days   = models.PositiveSmallIntegerField(default=0)
+    maternity_leave_days = models.PositiveSmallIntegerField(default=0)
+
+    # Qualifications
+    qualification_name = models.CharField(max_length=100, blank=True, null=True)
+    year_attained      = models.DateField(blank=True, null=True)
+
+    # HR Notes
+    hr_notes = models.TextField(blank=True, null=True)
+
+    # Module Permissions & Role - Role is already on User model. Modules could be M2M here or on User.
+    # Let's keep Modules M2M on Employee profile for HR/permission management context.
+    modules = models.ManyToManyField(Module, blank=True, related_name="employees")
+    # role    = models.ForeignKey(Role, on_delete=models.SET_NULL, blank=True, null=True) # Role is on User model
+
+    # Audit
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        # Ensure end_shift > start_shift if both are set
+        if self.start_shift and self.end_shift:
+            # Convert time objects to datetime objects for comparison, using a dummy date
+            dummy_date = timezone.now().date()
+            start_dt = timezone.datetime.combine(dummy_date, self.start_shift)
+            end_dt = timezone.datetime.combine(dummy_date, self.end_shift)
+
+            if end_dt <= start_dt:
+                raise ValidationError(_("End shift must be after start shift."))
+
+    @property
+    def total_hours_per_day(self):
+        """
+        Calculates total work hours per day based on start, end, and break duration.
+        """
+        if self.start_shift and self.end_shift:
+            # Convert time objects to minutes from midnight
+            start_minutes = self.start_shift.hour * 60 + self.start_shift.minute
+            end_minutes   = self.end_shift.hour * 60 + self.end_shift.minute
+
+            # Handle shifts crossing midnight
+            if end_minutes <= start_minutes:
+                total_shift_minutes = (24 * 60 - start_minutes) + end_minutes
+            else:
+                total_shift_minutes = end_minutes - start_minutes
+
+            break_minutes = self.break_duration_minutes if self.break_duration_minutes is not None else 0
+
+            work_duration_minutes = total_shift_minutes - break_minutes
+
+            if work_duration_minutes < 0:
+                work_duration_minutes = 0 # Should not be negative
+
+            hours = work_duration_minutes // 60
+            mins  = work_duration_minutes % 60
+            return f"{hours}h {mins}m"
+
+        return None # Return None if shifts are not fully defined
+
+# Add break_duration_minutes field to Employee model
+Employee.add_to_class('break_duration_minutes', models.PositiveSmallIntegerField(default=30, help_text="Break duration in minutes", blank=True, null=True)) # Added blank/null
+
+# Update total_hours_per_day property to use break_duration_minutes
+# Replace the old property with the new one
+del Employee.total_hours_per_day
+@property
+def total_hours_per_day(self):
+    """
+    Calculates total work hours per day based on start, end, and break duration.
+    """
+    if self.start_shift and self.end_shift:
+        # Convert time objects to minutes from midnight
+        start_minutes = self.start_shift.hour * 60 + self.start_shift.minute
+        end_minutes   = self.end_shift.hour * 60 + self.end_shift.minute
+
+        # Handle shifts crossing midnight
+        if end_minutes <= start_minutes:
+            total_shift_minutes = (24 * 60 - start_minutes) + end_minutes
+        else:
+            total_shift_minutes = end_minutes - start_minutes
+
+        break_minutes = self.break_duration_minutes if self.break_duration_minutes is not None else 0
+
+        work_duration_minutes = total_shift_minutes - break_minutes
+
+        if work_duration_minutes < 0:
+            work_duration_minutes = 0 # Should not be negative
+
+        hours = work_duration_minutes // 60
+        mins  = work_duration_minutes % 60
+        return f"{hours}h {mins}m"
+
+    return None # Return None if shifts are not fully defined
+Employee.add_to_class('total_hours_per_day', total_hours_per_day)
+
+
+# Model from laundry-exam3.txt for Emergency Contacts
+class EmergencyContact(models.Model):
+    # 1.1.3 Add Organization foreign key
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='emergency_contacts')
+    employee        = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="emergency_contacts")
+    first_name      = models.CharField(max_length=50)
+    middle_name     = models.CharField(max_length=50, blank=True, null=True)
+    last_name       = models.CharField(max_length=50)
+    phone_number    = models.CharField(max_length=20, help_text="Include country code")
+    whatsapp_number = models.CharField(max_length=20, blank=True, null=True)
+    gender          = models.CharField(max_length=10, choices=Employee.GENDER_CHOICES, blank=True, null=True) # Added blank/null
+    residential_addr= models.TextField(blank=True, null=True, help_text="Address of this emergency contact") # Added blank/null
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} – Emergency contact for {self.employee.user.get_full_name() or self.employee.employee_id}"
+
 
 # 1.2.3 Create Outlet model with address fields and GeoDjango PointField
 # 1.2.5 Link Outlet model to Organization via foreign key
