@@ -1,0 +1,180 @@
+from django.db import models
+from django.utils import timezone
+
+# ----------------------------------------------------------------------
+# 1) CUSTOMER
+# ----------------------------------------------------------------------
+class Customer(models.Model):
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=50, blank=True, null=True)
+    phone_number = models.CharField(max_length=20, unique=True)
+    email = models.EmailField(blank=True, null=True)
+    address = models.TextField(blank=True, null=True)  # e.g. neighborhood/town
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name}".strip() or self.phone_number
+
+
+# ----------------------------------------------------------------------
+# 2) LAUNDRY BAG (ORDER) HEADER
+# ----------------------------------------------------------------------
+class LaundryBag(models.Model):
+    # Collection Method Choices
+    CUSTOMER_DROPOFF = 'customer_dropoff'
+    COMPANY_PICKUP   = 'company_pickup'
+    COLLECTION_METHOD_CHOICES = [
+        (CUSTOMER_DROPOFF, 'Customer Drop-off'),
+        (COMPANY_PICKUP,   'Laundry Company Pick-Up'),
+    ]
+
+    # Delivery Method Choices
+    PICK_UP  = 'pick_up'
+    DELIVERY = 'delivery'
+    DELIVERY_METHOD_CHOICES = [
+        (PICK_UP,  'Pick Up'),
+        (DELIVERY, 'Delivery'),
+    ]
+
+    # Service Type (standard, express, etc.) – can also be a FK to a ServiceType model
+    service_type = models.CharField(max_length=30, help_text="e.g. 'Standard', 'Express'")
+
+    # Auto-generated invoice/bag numbers
+    bag_number     = models.CharField(max_length=20, unique=True)
+    invoice_number = models.CharField(max_length=20, unique=True)
+
+    customer = models.ForeignKey(Customer, on_delete=models.PROTECT, related_name="laundry_bags")
+
+    # When the bag was created, defaults to now
+    created_at = models.DateTimeField(default=timezone.now)
+    # If you want to track updates:
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Collection / Pickup info
+    collection_method = models.CharField(
+        max_length=20,
+        choices=COLLECTION_METHOD_CHOICES,
+        default=CUSTOMER_DROPOFF
+    )
+    pickup_location = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="If company pick-up, store pickup address/branch/etc."
+    )
+
+    # Duration (in days) and expected delivery date
+    duration_days  = models.PositiveIntegerField(default=0)
+    delivery_date  = models.DateField(blank=True, null=True)
+
+    # Totals – computed at save – but store here for quick display
+    total_amount      = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    amount_paid       = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    amount_outstanding = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    # Special instructions
+    special_instructions = models.TextField(blank=True, null=True)
+
+    # Delivery method + address (if delivery)
+    delivery_method   = models.CharField(
+        max_length=10,
+        choices=DELIVERY_METHOD_CHOICES,
+        default=PICK_UP
+    )
+    delivery_location = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="Address where laundry should be delivered"
+    )
+
+    def __str__(self):
+        return f"Bag #{self.bag_number} – {self.customer}"
+
+
+# ----------------------------------------------------------------------
+# 3) INDIVIDUAL ITEMS INSIDE A BAG (LINE ITEMS)
+# ----------------------------------------------------------------------
+class LaundryItem(models.Model):
+    bag = models.ForeignKey(
+        LaundryBag,
+        on_delete=models.CASCADE,
+        related_name='items'
+    )
+
+    # You could replace these CharFields with FKs to Category/ItemType tables if you want lookups
+    category = models.CharField(max_length=50, help_text="e.g. 'Ladies', 'Gents', 'Kids'")
+    item     = models.CharField(max_length=50, help_text="e.g. 'Ladies Caftan', 'Jacket', etc.")
+
+    unit_price = models.DecimalField(max_digits=7, decimal_places=2)
+    quantity   = models.PositiveIntegerField()
+
+    # Computed: unit_price * quantity, but stored for easy queries
+    amount = models.DecimalField(max_digits=9, decimal_places=2, default=0.00)
+
+    # Preferences: Wash / Dry / Iron (booleans)
+    wash = models.BooleanField(default=True)
+    dry  = models.BooleanField(default=False)
+    iron = models.BooleanField(default=False)
+
+    # Optionally link to the detailed item description (below)
+    detail = models.OneToOneField(
+        'ItemDetail',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        help_text="Complete item description/care info"
+    )
+
+    def save(self, *args, **kwargs):
+        # Auto-compute `amount` before saving
+        self.amount = self.unit_price * self.quantity
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.quantity}× {self.item} (Bag {self.bag.bag_number})"
+
+
+# ----------------------------------------------------------------------
+# 4) FULL ITEM DESCRIPTION / CARE DETAILS (OPTIONAL)
+# ----------------------------------------------------------------------
+class ItemDetail(models.Model):
+    # Basic Identification
+    item_type    = models.CharField(max_length=50, blank=True, null=True)
+    material     = models.CharField(max_length=50, blank=True, null=True)
+    color        = models.CharField(max_length=30, blank=True, null=True)
+    size         = models.CharField(max_length=20, blank=True, null=True)
+    quantity     = models.PositiveIntegerField(default=1)  # sometimes same as LaundryItem.quantity
+    tag_number   = models.CharField(max_length=30, blank=True, null=True)
+
+    # Condition & Care
+    condition    = models.CharField(max_length=30, blank=True, null=True)
+    age          = models.CharField(max_length=30, blank=True, null=True, help_text="Approximate age (e.g. '1 year')")
+    embellishments = models.CharField(max_length=100, blank=True, null=True)
+    care_label_instructions = models.TextField(blank=True, null=True)
+    special_handling = models.TextField(blank=True, null=True)
+
+    # Details
+    weight       = models.CharField(max_length=30, blank=True, null=True, help_text="e.g. '1.2 kg'")
+    pattern_design = models.CharField(max_length=50, blank=True, null=True)
+    dimensions     = models.CharField(max_length=50, blank=True, null=True, help_text="e.g. '50×30 cm'")
+    category       = models.CharField(max_length=50, blank=True, null=True)
+
+    # Image (upload to media/…)
+    image = models.ImageField(
+        upload_to='item_images/',
+        blank=True,
+        null=True,
+        help_text="Optional: photo of item (max 5 MB)"
+    )
+
+    def __str__(self):
+        parts = [self.item_type or '', self.color or '', self.size or '']
+        return " ".join([p for p in parts if p])
+
+
+# ----------------------------------------------------------------------
+# Signals or helper functions could be added to:
+#  - Auto‐generate `bag_number` / `invoice_number`
+#  - Update `LaundryBag.total_amount` whenever a LaundryItem is saved/deleted
+#  - Recompute `amount_outstanding = total_amount - amount_paid`
+# ----------------------------------------------------------------------

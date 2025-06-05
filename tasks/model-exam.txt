@@ -1,0 +1,203 @@
+based on the fields that would be required for lonapp during sign up here are some mock up models that can upgrade for production level models take inspiration from the other task documents and build on these models.
+from django.db import models
+
+class LaundryOrganization(models.Model):
+    # (You could also add a “name” field here if you capture it earlier in your signup flow.)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"LaundryOrganization #{self.id}"
+
+
+class OrganizationOfficial(models.Model):
+    ROLE_CHOICES = [
+        ("administrator", "Administrator"),
+        ("manager", "Manager"),
+        ("staff", "Staff"),
+        # …add any other roles you need
+    ]
+
+    organization = models.OneToOneField(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="official"
+    )
+    first_name     = models.CharField(max_length=50)
+    last_name      = models.CharField(max_length=50)
+    phone_number   = models.CharField(max_length=20, help_text="Include country code, e.g. +233...")
+    whatsapp_number= models.CharField(max_length=20, help_text="Include country code")
+    title          = models.CharField(max_length=100, blank=True)  # Optional
+    role           = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    email          = models.EmailField()
+    id_document    = models.FileField(
+        upload_to="organization_official_ids/",
+        help_text="Upload a photo/PDF of the official's ID (max 5 MB)."
+    )
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} ({self.role})"
+
+
+class RegistrationDocument(models.Model):
+    DOC_TYPE_CHOICES = [
+        ("sole_proprietor", "Sole Proprietor"),
+        ("partnership",      "Partnership"),
+        ("llc",              "Limited Liability Company"),
+        ("unregistered",     "Unregistered"),
+    ]
+
+    DOCUMENT_NAME_CHOICES = [
+        # Use logical codes that map to each file field
+        ("cert_registration",     "Certification of Registration"),
+        ("form_a",                "Form A"),
+        ("cert_incorporation",    "Certification of Incorporation"),
+        ("form_3b",               "Form 3B"),
+        ("partnership_deed",      "Partnership Deed (Optional)"),
+    ]
+
+    organization      = models.ForeignKey(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="registration_documents"
+    )
+    doc_type          = models.CharField(max_length=20, choices=DOC_TYPE_CHOICES)
+    document_name     = models.CharField(max_length=30, choices=DOCUMENT_NAME_CHOICES)
+    file              = models.FileField(
+        upload_to="registration_docs/",
+        help_text="Max file size: 5 MB."
+    )
+    uploaded_at       = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.get_doc_type_display()} – {self.get_document_name_display()}"
+
+class Outlet(models.Model):
+    organization      = models.ForeignKey(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="outlets"
+    )
+    full_name         = models.CharField(max_length=100, help_text="E.g. Pokosiai Laundry")
+    abbreviated_name  = models.CharField(max_length=20, help_text="E.g. PK")
+    phone_number      = models.CharField(max_length=20, help_text="Include country code")
+    whatsapp_number   = models.CharField(max_length=20, help_text="Include country code")
+    physical_address  = models.CharField(max_length=200)
+    gps_address       = models.CharField(max_length=100, help_text="Exact GPS coordinates or a map link")
+
+    def __str__(self):
+        return f"{self.abbreviated_name} – {self.full_name}"
+
+class PaymentDetail(models.Model):
+    PAYMENT_TYPE_CHOICES = [
+        ("bank",        "Bank Account"),
+        ("mobile_money","Mobile Money"),
+    ]
+
+    # Bank choices (you can fill in actual bank names)
+    BANK_CHOICES = [
+        ("calbank",     "CalBank"),
+        ("gt_bank",     "GTBank"),
+        ("stanbic",     "Stanbic"),
+        # …etc.
+    ]
+
+    # Mobile Money network choices
+    MM_NETWORK_CHOICES = [
+        ("mtn",       "MTN"),
+        ("vodafone",  "Vodafone"),
+        ("airtel_tigo","AirtelTigo"),
+        # …etc.
+    ]
+
+    organization   = models.ForeignKey(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="payment_details"
+    )
+    payment_type   = models.CharField(max_length=20, choices=PAYMENT_TYPE_CHOICES)
+
+    # Fields for Bank Account (only used when payment_type == "bank")
+    bank_name      = models.CharField(
+        max_length=30,
+        choices=BANK_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Select Bank (if payment_type is 'bank')"
+    )
+    account_number = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Enter bank account number"
+    )
+    branch         = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Bank branch name"
+    )
+
+    # Fields for Mobile Money (only used when payment_type == "mobile_money")
+    mobile_network = models.CharField(
+        max_length=20,
+        choices=MM_NETWORK_CHOICES,
+        blank=True,
+        null=True,
+        help_text="Select Mobile Money network"
+    )
+    merchant_number= models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Mobile Money merchant number"
+    )
+    merchant_id    = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text="Mobile Money merchant ID"
+    )
+
+    def clean(self):
+        """
+        Enforce that bank fields are set only when payment_type == 'bank',
+        and mobile_money fields are set only when payment_type == 'mobile_money'.
+        """
+        from django.core.exceptions import ValidationError
+
+        if self.payment_type == "bank":
+            # bank-specific fields must not be empty
+            if not self.bank_name or not self.account_number or not self.branch:
+                raise ValidationError("All bank account fields are required for a Bank payment mode.")
+        elif self.payment_type == "mobile_money":
+            if not self.mobile_network or not self.merchant_number or not self.merchant_id:
+                raise ValidationError("All Mobile Money fields are required for a Mobile Money payment mode.")
+
+    def __str__(self):
+        if self.payment_type == "bank":
+            return f"Bank: {self.get_bank_name_display()} (account {self.account_number})"
+        else:
+            return f"Mobile Money: {self.get_mobile_network_display()} (Merchant {self.merchant_number})"
+
+class SocialMedia(models.Model):
+    PLATFORM_CHOICES = [
+        ("facebook",  "Facebook"),
+        ("instagram", "Instagram"),
+        ("twitter",   "Twitter"),
+        ("linkedin",  "LinkedIn"),
+        ("tiktok",    "TikTok"),
+        # …add any others you need
+    ]
+
+    organization     = models.ForeignKey(
+        LaundryOrganization,
+        on_delete=models.CASCADE,
+        related_name="social_media_accounts"
+    )
+    platform         = models.CharField(max_length=20, choices=PLATFORM_CHOICES)
+    account_handle   = models.CharField(max_length=100, help_text="E.g. SunnyLaundry@1234")
+    link             = models.URLField(help_text="Full URL to the social page")
+
+    def __str__(self):
+        return f"{self.get_platform_display()}: {self.account_handle}"
