@@ -212,8 +212,10 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_EXTRA_DATA = ['first_name', 'last_name']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-GDAL_LIBRARY_PATH= os.environ.get('GDAL_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\gdal.dll')
-# Correct the typo here from GEO_lIBRARY_PATH to GEOS_LIBRARY_PATH
-GEOS_LIBRARY_PATH = os.environ.get('GEOS_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\geos_c.dll')
+# GDAL_LIBRARY_PATH= os.environ.get('GDAL_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\gdal.dll')
+# # Correct the typo here from GEO_lIBRARY_PATH to GEOS_LIBRARY_PATH
+# GEOS_LIBRARY_PATH = os.environ.get('GEOS_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\geos_c.dll')
 
 
+GDAL_LIBRARY_PATH= os.environ.get('GDAL_LIBRARY_PATH')
+GEOS_LIBRARY_PATH = os.environ.get('GEOS_LIBRARY_PATH')

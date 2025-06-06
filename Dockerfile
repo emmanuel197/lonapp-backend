@@ -1,29 +1,43 @@
-# ── Step 0: pick your base
-FROM python:3.11-slim
+# Use a Python image based on Debian that includes necessary libraries
+FROM python:3.9-slim-buster
 
-# ── Step 1: install GDAL & GEOS system libs
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      gdal-bin \
-      libgdal-dev \
-      libgeos-dev \
- && rm -rf /var/lib/apt/lists/*
+# Install GDAL and GEOS libraries and their dependencies
+# libgdal-dev includes the GDAL library and headers
+# libgeos-dev includes the GEOS library and headers
+# postgis is often needed for spatial database interactions
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgdal-dev \
+    libgeos-dev \
+    postgis \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# ── Step 2: set GDAL/GEOS paths for Python bindings
+# Set environment variables for GDAL and GEOS library paths within the container
+# These paths are standard locations on Debian-based systems after installing the packages
 ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
 ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
 
-# ── Step 3: create app dir & install Python deps
+# Set the working directory in the container
 WORKDIR /app
-COPY requirements.txt .
+
+# Copy the requirements file and install Python dependencies
+COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Step 4: copy in code + entrypoint
-COPY . .
-# copy your entrypoint script (see below)
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Copy the rest of the application code
+COPY . /app/
 
-# ── Step 5: expose port and launch via entrypoint
-EXPOSE 8000
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Collect static files (important for production)
+RUN python manage.py collectstatic --noinput
+
+# Run database migrations (optional, can also be a separate Render job)
+# RUN python manage.py migrate
+
+# Expose the port the application will run on
+# Render automatically sets the PORT environment variable
+EXPOSE $PORT
+
+# Command to run the application using Gunicorn
+# Replace 'lonapp.wsgi:application' with your actual project.wsgi path
+CMD ["gunicorn", "lonapp.wsgi:application", "--bind", "0.0.0.0:$PORT"]

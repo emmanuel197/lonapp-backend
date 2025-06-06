@@ -1,7 +1,12 @@
-__pycache__/
-*.py[cod]
-env/
-venv/
-.git/
+.git
+.gitignore
+.env
+venv
+__pycache__
+*.pyc
 *.sqlite3
-media/
+.vscode
+node_modules # If you have frontend assets built separately
+dist
+build
+*.log

@@ -14,18 +14,19 @@ services:
         scope: secret
       - key: DATABASE_URL
         scope: secret
-      - key: GDAL_LIBRARY_PATH
-        scope: secret
-      - key: GEOS_LIBRARY_PATH
-        scope: secret
+      # GDAL_LIBRARY_PATH and GEOS_LIBRARY_PATH are set in the Dockerfile
       - key: EMAIL_HOST_USER
         scope: secret
       - key: EMAIL_HOST_PASSWORD
         scope: secret
       - key: DEBUG
         value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*.onrender.com"
       - key: SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
         scope: secret
       - key: SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET
         scope: secret
-      # …and any other DJANGO_* or EMAIL_* envs you need
+      # Add any other environment variables your application needs
+      # e.g., FRONTEND_URL, SUPERUSER_*, MEDIA_URL etc.
+      # It's recommended to set sensitive variables as 'secret' in the Render dashboard.
