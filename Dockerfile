@@ -2,21 +2,23 @@
 FROM python:3.9-slim-buster
 
 # Install GDAL and GEOS libraries and their dependencies
-# libgdal-dev includes the GDAL library and headers
-# libgeos-dev includes the GEOS library and headers
+# libgdal-dev and libgeos-dev provide headers/static libs for building
+# libgdal30 and libgeos-c1v5 provide the runtime shared libraries
 # postgis is often needed for spatial database interactions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgdal-dev \
     libgeos-dev \
+    libgdal30 \
+    libgeos-c1v5 \
     postgis \
     gcc \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables for GDAL and GEOS library paths within the container
-# These paths are standard locations on Debian-based systems after installing the packages
-ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
-ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
+# Remove explicit environment variables for GDAL/GEOS paths
+# Django should find them in standard system locations after installation
+# ENV GDAL_LIBRARY_PATH=/usr/lib/libgdal.so
+# ENV GEOS_LIBRARY_PATH=/usr/lib/libgeos_c.so
 
 # Set the working directory in the container
 WORKDIR /app
