@@ -88,55 +88,70 @@ class Module(models.Model):
 # We will keep the User model focused on authentication and core identity,
 # and potentially link it to an Employee profile if detailed HR data is needed separately.
 # For now, we'll add some key fields from Employee to User if they are relevant for login/basic profile.
-class User(AbstractUser):
-    # Remove username field if using email/phone for login
-    # username = None # Uncomment if using email/phone as primary identifier
+# class User(AbstractUser):
+#     # Remove username field if using email/phone for login
+#     # username = None # Uncomment if using email/phone as primary identifier
 
-    email = models.EmailField(unique=True, blank=True, null=True)
-    phone_number = models.CharField(max_length=20, unique=True, blank=True, null=True) # 1.3.2
-    # 1.3.3 Link staff users to an Organization
-    # Note: This field is for staff users. Customer organization link is in CustomerProfile.
-    organization = models.ForeignKey(
-        Organization,
-        on_delete=models.CASCADE,
-        related_name='staff_users',
-        null=True, # Null for customers and super_admin
-        blank=True
-    )
-    # 1.3.4 Link user to a Role
-    role = models.ForeignKey(
-        Role,
-        on_delete=models.SET_NULL, # Or models.PROTECT depending on desired behavior
-        null=True,
-        blank=True
-    )
+#     email = models.EmailField(unique=True, blank=True, null=True)
+#     phone_number = models.CharField(max_length=20, unique=True, blank=True, null=True) # 1.3.2
+#     # 1.3.3 Link staff users to an Organization
+#     # Note: This field is for staff users. Customer organization link is in CustomerProfile.
+#     organization = models.ForeignKey(
+#         Organization,
+#         on_delete=models.CASCADE,
+#         related_name='staff_users',
+#         null=True, # Null for customers and super_admin
+#         blank=True
+#     )
+#     # 1.3.4 Link user to a Role
+#     role = models.ForeignKey(
+#         Role,
+#         on_delete=models.SET_NULL, # Or models.PROTECT depending on desired behavior
+#         null=True,
+#         blank=True
+#     )
 
-    # Add address field from model-exam2.txt Customer - Used for general user address
-    address = models.TextField(blank=True, null=True) # e.g. neighborhood/town
+#     # Add address field from model-exam2.txt Customer - Used for general user address
+#     address = models.TextField(blank=True, null=True) # e.g. neighborhood/town
 
-    # Add fields from laundry-exam3.txt Employee if needed in User model
-    # employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True) # Keep separate in Employee model?
-    # profile_image = models.ImageField(upload_to="user_profiles/", blank=True, null=True) # Can add to User
-    # gender = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], blank=True, null=True) # Can add to User
-    # date_of_birth = models.DateField(blank=True, null=True) # Can add to User
-    # residential_addr = models.TextField(blank=True, null=True) # Already have 'address'
+#     # Add fields from laundry-exam3.txt Employee if needed in User model
+#     # employee_id = models.CharField(max_length=20, unique=True, blank=True, null=True) # Keep separate in Employee model?
+#     # profile_image = models.ImageField(upload_to="user_profiles/", blank=True, null=True) # Can add to User
+#     # gender = models.CharField(max_length=10, choices=[("male", "Male"), ("female", "Female"), ("other", "Other")], blank=True, null=True) # Can add to User
+#     # date_of_birth = models.DateField(blank=True, null=True) # Can add to User
+#     # residential_addr = models.TextField(blank=True, null=True) # Already have 'address'
 
-    # USERNAME_FIELD = 'email' # Uncomment if using email for login
-    # REQUIRED_FIELDS = [] # Add fields required for createsuperuser if username is removed
+#     USERNAME_FIELD = 'email' # Uncomment if using email for login
+#     REQUIRED_FIELDS = [] # Add fields required for createsuperuser if username is removed
+#     groups = models.ManyToManyField(
+#         'auth.Group',
+#         verbose_name='groups',
+#         blank=True,
+#         help_text='The groups this user belongs to. A user will get all permissions granted to each of their groups.',
+#         related_name="api_user_set", # Add a unique related_name (different from accounts_user_set)
+#         related_query_name="api_user",
+#     )
+#     user_permissions = models.ManyToManyField(
+#     'auth.Permission',
+#     verbose_name='user permissions',
+#     blank=True,
+#     help_text='Specific permissions for this user.',
+#     related_name="api_user_permissions_set", # Add a unique related_name (different from accounts_user_permissions_set)
+#     related_query_name="api_user_permission",
+# )
+#     def __str__(self):
+#         if self.first_name and self.last_name:
+#             return f"{self.first_name} {self.last_name} ({self.role or 'No Role'})"
+#         elif self.email:
+#             return f"{self.email} ({self.role or 'No Role'})"
+#         elif self.phone_number:
+#             return f"{self.phone_number} ({self.role or 'No Role'})"
+#         else:
+#             return f"User ID: {self.id} ({self.role or 'No Role'})"
 
-    def __str__(self):
-        if self.first_name and self.last_name:
-            return f"{self.first_name} {self.last_name} ({self.role or 'No Role'})"
-        elif self.email:
-            return f"{self.email} ({self.role or 'No Role'})"
-        elif self.phone_number:
-            return f"{self.phone_number} ({self.role or 'No Role'})"
-        else:
-            return f"User ID: {self.id} ({self.role or 'No Role'})"
-
-    class Meta:
-        # Add constraints or indexes if needed
-        pass
+#     class Meta:
+#         # Add constraints or indexes if needed
+#         pass
 
 # Model from laundry-exam4.txt for detailed Customer information
 # This model holds customer-specific data and links to the core User model.

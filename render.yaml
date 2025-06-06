@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: lonapp-web
+    env: docker
+    # If you push to GitHub, you can point at your repo/branch here:
+    # repo: https://github.com/yourname/lonapp
+    # branch: main
+
+    # Build and run commands (Dockerfile auto‐used):
+    plan: free        # free tier
+    region: ord       # or iad, etc.
+    envVars:
+      - key: SECRET_KEY
+        scope: secret
+      - key: DATABASE_URL
+        scope: secret
+      - key: GDAL_LIBRARY_PATH
+        scope: secret
+      - key: GEOS_LIBRARY_PATH
+        scope: secret
+      - key: DEBUG
+        value: "False"
+      - key: SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
+        scope: secret
+      - key: SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET
+        scope: secret
+      # …and any other DJANGO_* or EMAIL_* envs you need

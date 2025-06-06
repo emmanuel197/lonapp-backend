@@ -3,6 +3,8 @@ import os
 from datetime import timedelta
 import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
+import django.contrib.gis.db.backends.postgis
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 from dotenv import load_dotenv
@@ -19,8 +21,11 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['.vercel.app']
+DEBUG = os.getenv("DEBUG", "False") == "True"
 
+ALLOWED_HOSTS = ['.vercel.app', '127.0.0.1']
+
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", ".onrender.com").split(",")
 
 # Application definition
 
@@ -32,6 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Add django.contrib.gis here
+    'django.contrib.gis',
     'store.apps.StoreConfig',
     'api.apps.ApiConfig',
     'rest_framework',
@@ -42,7 +49,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist'
 ]
 
-AUTH_USER_MODEL = "api.User"
+AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -54,6 +61,11 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+# Static files with WhiteNoise
+MIDDLEWARE.insert(
+    1,
+    "whitenoise.middleware.WhiteNoiseMiddleware"
+)
 
 ROOT_URLCONF = 'lonapp.urls'
 
@@ -90,7 +102,7 @@ DATABASES = {
 DATABASE_URL = os.environ.get('DATABASE_URL')
 DATABASES['default'] = dj_database_url.config(default=DATABASE_URL)
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_BACKEND = 'djan`go.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
@@ -187,6 +199,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 STATIC_URL = "/static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
 
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -197,6 +210,10 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = os.environ.get('SOCIAL_AUTH_GOOGLE_OAUTH2_SEC
 SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = ['https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile', 'openid']
 SOCIAL_AUTH_GOOGLE_OAUTH2_EXTRA_DATA = ['first_name', 'last_name']
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'\
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+GDAL_LIBRARY_PATH= os.environ.get('GDAL_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\gdal.dll')
+# Correct the typo here from GEO_lIBRARY_PATH to GEOS_LIBRARY_PATH
+GEOS_LIBRARY_PATH = os.environ.get('GEOS_LIBRARY_PATH', 'C:\\Program Files\\GDAL\\geos_c.dll')
 
 
