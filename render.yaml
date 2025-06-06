@@ -30,3 +30,4 @@ services:
       # Add any other environment variables your application needs
       # e.g., FRONTEND_URL, SUPERUSER_*, MEDIA_URL etc.
       # It's recommended to set sensitive variables as 'secret' in the Render dashboard.
+    startCommand: "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn lonapp.wsgi:application --bind 0.0.0.0:$PORT"
