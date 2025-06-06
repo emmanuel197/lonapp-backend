@@ -1,15 +1,15 @@
 # Use a Python image based on Debian that includes necessary libraries
 FROM python:3.9-slim-buster
 
-# Install GDAL and GEOS libraries and their dependencies
-# libgdal-dev and libgeos-dev provide headers/static libs for building
-# libgdal26 and libgeos-c1 provide the runtime shared libraries for Debian Buster (python:3.9-slim-buster base)
+# Install necessary packages including GDAL and GEOS
+# gdal-bin provides GDAL utilities and libraries
+# libgeos-dev provides GEOS headers and static libs
+# libgeos-c1v5 provides the GEOS runtime shared library (based on previous error hint)
 # postgis is often needed for spatial database interactions
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgdal-dev \
+    gdal-bin \
     libgeos-dev \
-    libgdal26 \
-    libgeos-c1 \
+    libgeos-c1v5 \
     postgis \
     gcc \
     python3-dev \
