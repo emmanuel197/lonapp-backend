@@ -18,6 +18,10 @@ services:
         scope: secret
       - key: GEOS_LIBRARY_PATH
         scope: secret
+      - key: EMAIL_HOST_USER
+        scope: secret
+      - key: EMAIL_HOST_PASSWORD
+        scope: secret
       - key: DEBUG
         value: "False"
       - key: SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
