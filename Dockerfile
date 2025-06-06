@@ -18,10 +18,12 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Step 4: copy code and collect static
+# ── Step 4: copy in code + entrypoint
 COPY . .
-RUN python manage.py collectstatic --noinput
+# copy your entrypoint script (see below)
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# ── Step 5: expose port and launch
+# ── Step 5: expose port and launch via entrypoint
 EXPOSE 8000
-CMD ["gunicorn", "lonapp.wsgi:application", "--bind", "0.0.0.0:8000"]
+ENTRYPOINT ["/app/entrypoint.sh"]
