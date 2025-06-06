@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: lonapp-web
+    name: lonapp-web # Replace with your desired service name
     env: docker
     # If you push to GitHub, you can point at your repo/branch here:
     # repo: https://github.com/yourname/lonapp
@@ -20,9 +20,9 @@ services:
       - key: EMAIL_HOST_PASSWORD
         scope: secret
       - key: DEBUG
-        value: "False"
-      - key: ALLOWED_HOSTS
-        value: "*.onrender.com"
+        value: "False" # Set to False for production
+      - key: ALLOWED_HOSTS # Set this in Render dashboard or use a value like *.onrender.com
+        value: "*.onrender.com" # Example, adjust as needed
       - key: SOCIAL_AUTH_GOOGLE_OAUTH2_KEY
         scope: secret
       - key: SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET
@@ -30,4 +30,5 @@ services:
       # Add any other environment variables your application needs
       # e.g., FRONTEND_URL, SUPERUSER_*, MEDIA_URL etc.
       # It's recommended to set sensitive variables as 'secret' in the Render dashboard.
-    startCommand: "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn lonapp.wsgi:application --bind 0.0.0.0:$PORT"
+    # Use curly braces around $PORT to ensure correct variable expansion by the shell
+    startCommand: "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn lonapp.wsgi:application --bind 0.0.0.0:${PORT}"
