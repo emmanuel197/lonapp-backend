@@ -23,7 +23,7 @@ DEBUG = False
 
 DEBUG = os.getenv("DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = ['.vercel.app', '127.0.0.1', 'lonapp-backend.onrender.com']
+ALLOWED_HOSTS = ['.vercel.app', '127.0.0.1', 'lonapp-backend.onrender.com', '0.0.0.0']
 
 # ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", ".onrender.com").split(",")
 
