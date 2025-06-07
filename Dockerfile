@@ -38,8 +38,8 @@ COPY . /app/
 
 # Expose the port the application will run on
 # Render automatically sets the PORT environment variable
-EXPOSE $PORT
+EXPOSE 8000
 
 # Command to run the application using Gunicorn - collectstatic and migrate will run before this
 # Replace 'lonapp.wsgi:application' with your actual project.wsgi path
-CMD ["gunicorn", "lonapp.wsgi:application", "--bind", "0.0.0.0:$PORT"]
+CMD ["gunicorn", "lonapp.wsgi:application", "--bind", "0.0.0.0:8000"]
