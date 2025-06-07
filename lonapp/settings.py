@@ -21,7 +21,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-DEBUG = os.getenv("DEBUG", "False") 
+DEBUG = os.getenv("DEBUG", False) 
 
 ALLOWED_HOSTS = ['.vercel.app', '127.0.0.1', 'lonapp-backend.onrender.com', '0.0.0.0']
 
